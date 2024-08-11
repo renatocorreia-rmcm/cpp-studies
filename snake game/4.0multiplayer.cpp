@@ -1,0 +1,1 @@
+// HOW TO MAKE SNAKE DISAPPEAR AFTER DEATH? get tail sense algorith and iterate over her all
