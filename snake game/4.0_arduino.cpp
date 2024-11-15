@@ -16,6 +16,13 @@ const int load_pin = 3;
 const int clk_pin = 2;
 LedControl matrix = LedControl(din_pin, clk_pin, load_pin, 1);
 
+// BUZZER ###########################################################
+
+const int buzzer_pin = 5;
+const int min_freq = 1000;
+const int max_freq = 4000;
+
+
 /*
 ███████  ██████ ██████  ███████ ███████ ███    ██      ██████  ██       ██████  ██████   █████  ██      ███████
 ██      ██      ██   ██ ██      ██      ████   ██     ██       ██      ██    ██ ██   ██ ██   ██ ██      ██
@@ -62,9 +69,9 @@ void blit(){
     }
 }
 
-void clear(int* amount_of_void_squares){
+void clear(){
   memset(screen, logic_void_pixel, screen_size * sizeof(int));
-  *amount_of_void_squares = screen_size;
+  amount_of_void_squares = screen_size;
   matrix.clearDisplay(0);
 }
 
@@ -86,7 +93,7 @@ struct snake{
 
     const int x_pin, y_pin, sw_pin;
 
-    const int joystick_sensibility = 20;
+    const int joystick_sensibility = 50;
 
     char pressed_key;
 
@@ -139,6 +146,15 @@ struct snake{
 
 
 
+
+// PLAYERS
+const int amount_of_players = 1;
+
+snake jobert(24, 'r', A6, A7, 25);
+
+snake* players[amount_of_players] = {&jobert};  // auto add player in players[] on construction
+
+
 /*
 ███████ ██    ██ ███    ██  ██████ ████████ ██  ██████  ███    ██ ███████
 ██      ██    ██ ████   ██ ██         ██    ██ ██    ██ ████   ██ ██
@@ -163,13 +179,19 @@ void wait_input(int* players, int amount_of_players, int delaytime, int iteratio
      ██ ██         ██    ██    ██ ██      
 ███████ ███████    ██     ██████  ██      
 */
-void setup() {+++++++
+void setup() {
 
   matrix.shutdown(0, false);
   matrix.setIntensity(0, 0);
   matrix.clearDisplay(0);
 
   randomSeed(analogRead(0));
+
+  pinMode(buzzer_pin, OUTPUT);
+
+  pinMode(jobert.x_pin, INPUT);  // for p in range amount of players
+  pinMode(jobert.y_pin, INPUT);
+  pinMode(jobert.sw_pin, INPUT_PULLUP);
 }
 
 
@@ -182,6 +204,7 @@ void setup() {+++++++
 */
 void loop() {  // 1 iteration = 1 match
 
+    snake jobert(24, 'r', A6, A7, 12);
 
     /*
     ███████ ███████ ████████ ██    ██ ██████      ███    ███  █████  ████████  ██████ ██   ██ 
@@ -196,19 +219,8 @@ void loop() {  // 1 iteration = 1 match
     const int period_mili = 200;  
 
 
-    // PLAYERS
-    const int amount_of_players = 1;
-
-    snake jobert(24, 'r', A6, A7, 12);
-    snake* players[amount_of_players] = {&jobert};  // auto add player in players[] on construction
-
-    pinMode(jobert.x_pin, INPUT);  // for p in range amount of players
-    pinMode(jobert.y_pin, INPUT);
-    pinMode(jobert.sw_pin, INPUT_PULLUP);
-
-
     // SCREEN
-    clear(&amount_of_void_squares);
+    clear();
     screen[jobert.new_head] = jobert.sense;
     blit();
 
@@ -231,9 +243,13 @@ void loop() {  // 1 iteration = 1 match
   while (!is_game_over){
 
 
-      // TIMING ##################################################
+      // TIMING AND BUZZ ##########################################
 
-      delay(period_mili);
+      tone(buzzer_pin, (1-(jobert.new_head/(float)screen_size))*max_freq+min_freq);
+      delay(period_mili/5);
+      noTone(buzzer_pin);
+      delay(period_mili*4/5);
+
 
 
       // INPUT ###################################################
@@ -247,23 +263,25 @@ void loop() {  // 1 iteration = 1 match
 
       // snake head projection
       jobert.past_head = jobert.new_head;
-      jobert.new_head += jobert.sense;
+      jobert.new_head = jobert.new_head + jobert.sense;
 
       // check harmfull collision
-      if ((jobert.new_head%screen_width != jobert.past_head%screen_width && jobert.new_head/screen_width != jobert.past_head/screen_width)  // check hitted wall: x1!=x2 and y1!=y2
-          || (jobert.new_head < 0 || jobert.new_head >= screen_size)  // check hitted ceilling
-          || ((screen[jobert.new_head]!=logic_void_pixel) && (screen[jobert.new_head]!=logic_fruit_pixel) && (jobert.new_head!=jobert.current_tail))){  // check hitted itself
-
-          is_game_over = true;
+      if  (   ( (jobert.new_head%screen_width != jobert.past_head%screen_width) && (jobert.new_head/screen_width != jobert.past_head/screen_width)    )  // check hitted wall: x1!=x2 and y1!=y2
+          ||  ( (jobert.new_head < 0) || (jobert.new_head >= screen_size)                                                                             )  // check hitted ceilling
+          ||  ( (screen[jobert.new_head]!=logic_void_pixel) && (screen[jobert.new_head]!=logic_fruit_pixel) && (jobert.new_head!=jobert.current_tail)))  // check hitted itself
+      {
+        is_game_over = true;
       }
 
-      else{  // it was a legal head projection
-
-          if (screen[jobert.new_head]==logic_fruit_pixel){  // eated fruit
+      else  // it was a legal head projection
+      {  
+          if (screen[jobert.new_head]==logic_fruit_pixel)  // eated fruit
+          {  
               jobert.size++;
               generate_fruit();
           }
-          else {  // do not eated fruit
+          else  // do not eated fruit
+          {  
               // loses tail
               jobert.past_tail = jobert.current_tail;
               jobert.current_tail += jobert.get_tail_sense();
